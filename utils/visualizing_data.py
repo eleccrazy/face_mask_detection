@@ -5,10 +5,10 @@ This module visualizes the data distribution across train, validation, and test 
 for different models (e.g., MobileNet-SSD and YOLO) used in a face mask detection project.
 
 Functionality:
-    - Counts the number of images in each class directory (e.g., 'mask', 'no_mask') 
+    - Counts the number of images in each class directory (e.g., 'with_mask', 'without_mask', 'mask_weared_incorrect') 
       across train, validation, and test splits.
-    - Plots the data distribution for each model, showing the number of images in each 
-      class for the respective splits.
+    - Plots the data distribution for each model, showing the number of images in each class 
+      for the respective splits.
 
 Dependencies:
     - os: For file system operations.
@@ -18,26 +18,41 @@ Expected Directory Structure:
     ./dataset/processed_dataset/
     ├── MobileNet-SSD/
     │   ├── train/
-    │   │   ├── mask/
-    │   │   └── no_mask/
+    │   │   ├── with_mask/
+    │   │   ├── without_mask/
+    │   │   └── mask_weared_incorrect/
     │   ├── validation/
-    │   │   ├── mask/
-    │   │   └── no_mask/
+    │   │   ├── with_mask/
+    │   │   ├── without_mask/
+    │   │   └── mask_weared_incorrect/
     │   └── test/
-    │       ├── mask/
-    │       └── no_mask/
+    │       ├── with_mask/
+    │       ├── without_mask/
+    │       └── mask_weared_incorrect/
     └── YOLO/
         ├── train/
+        │   ├── with_mask/
+        │   ├── without_mask/
+        │   └── mask_weared_incorrect/
         ├── validation/
+        │   ├── with_mask/
+        │   ├── without_mask/
+        │   └── mask_weared_incorrect/
         └── test/
+            ├── with_mask/
+            ├── without_mask/
+            └── mask_weared_incorrect/
 
 Functions:
-    - count_images_in_split(base_dir):
-        Counts the number of images in each class for train, validation, and test splits.
+    - count_images_in_directory(directory):
+        Counts the number of images in each class directory for a specific dataset split.
+
+    - get_data_distribution(base_dir):
+        Aggregates the counts of images across train, validation, and test splits for a given model.
 
     - plot_data_distribution(data_counts, model_name):
-        Plots the distribution of images for a specific model, showing counts for each 
-        class (e.g., 'mask', 'no_mask') across train, validation, and test splits.
+        Plots the distribution of images for a specific model, showing counts for each class 
+        ('with_mask', 'without_mask', 'mask_weared_incorrect') across train, validation, and test splits.
 
 Usage:
     - Ensure the processed dataset directories exist as per the above structure.
@@ -51,11 +66,15 @@ Example:
 Outputs:
     - Console: Prints the data distribution as dictionaries for each model and split.
     - Plots: Displays bar charts showing the data distribution for each split 
-      (train, validation, test) and class ('mask', 'no_mask').
+      (train, validation, test) and class ('with_mask', 'without_mask', 'mask_weared_incorrect').
 
 Expected output for the Face Mask Detection Dataset:
-    MobileNet-SSD Data Distribution: {'train': {'mask': 537, 'no_mask': 59}, 'validation': {'mask': 77, 'no_mask': 8}, 'test': {'mask': 154, 'no_mask': 18}}
-    YOLO Data Distribution: {'train': {'mask': 537, 'no_mask': 59}, 'validation': {'mask': 77, 'no_mask': 8}, 'test': {'mask': 154, 'no_mask': 18}}
+    MobileNet-SSD Data Distribution: {'train': {'with_mask': 2262, 'without_mask': 501, 'mask_weared_incorrect': 86}, 
+                                       'validation': {'with_mask': 323, 'without_mask': 72, 'mask_weared_incorrect': 12}, 
+                                       'test': {'with_mask': 647, 'without_mask': 144, 'mask_weared_incorrect': 25}}
+    YOLO Data Distribution: {'train': {'with_mask': 2262, 'without_mask': 501, 'mask_weared_incorrect': 86}, 
+                              'validation': {'with_mask': 323, 'without_mask': 72, 'mask_weared_incorrect': 12}, 
+                              'test': {'with_mask': 647, 'without_mask': 144, 'mask_weared_incorrect': 25}}
 
 Note:
     - If directories are missing or empty, the module will print warnings and plot 
@@ -63,89 +82,95 @@ Note:
 """
 import os
 import matplotlib.pyplot as plt
-
-# Paths to processed dataset directories
-mobilenet_base_dir = './dataset/processed_dataset/MobileNet-SSD'
-yolo_base_dir = './dataset/processed_dataset/YOLO'
+from typing import Dict
 
 
-# Function to count images in each class directory for a given split
-def count_images_in_split(base_dir):
+def count_images_in_directory(directory: str) -> Dict[str, int]:
     """
-    Counts images in the train, validation, and test directories for each class.
+    Counts the number of images in each class subdirectory within a given directory.
 
-    Parameters:
-        base_dir (str): Base directory containing train, validation, and test splits.
+    Args:
+        directory (str): The path to the parent directory containing class subdirectories.
 
     Returns:
-        dict: A dictionary with counts of images for each split and class.
+        Dict[str, int]: A dictionary where the keys are class names (subdirectory names)
+                        and the values are the counts of images in each class.
+    """
+    class_counts = {}
+    for class_dir in os.listdir(directory):
+        class_path = os.path.join(directory, class_dir)
+        if os.path.isdir(class_path):
+            num_images = len([file for file in os.listdir(class_path) if file.endswith(('.jpg', '.jpeg', '.png'))])
+            class_counts[class_dir] = num_images
+    return class_counts
+
+def get_data_distribution(base_dir: str)-> Dict[str, Dict[str, int]]:
+    """
+    Aggregates the distribution of images across train, validation, and test splits.
+
+    Args:
+        base_dir (str): The base directory containing train, validation, and test subdirectories.
+
+    Returns:
+        Dict[str, Dict[str, int]]: A dictionary where the keys are split names ('train', 'validation', 'test')
+                                   and the values are dictionaries containing class-wise image counts for each split.
     """
     splits = ['train', 'validation', 'test']
     data_distribution = {}
 
     for split in splits:
         split_dir = os.path.join(base_dir, split)
-        split_counts = {}
-        if not os.path.exists(split_dir):  # Check if the split directory exists
-            print(f"Warning: {split_dir} does not exist.")
+        if not os.path.exists(split_dir):
+            data_distribution[split] = {}
             continue
-
-        for class_dir in os.listdir(split_dir):
-            class_path = os.path.join(split_dir, class_dir)
-            if os.path.isdir(class_path):
-                num_images = len([
-                    file for file in os.listdir(class_path)
-                    if file.endswith(('.jpg', '.jpeg', '.png'))
-                ])
-                split_counts[class_dir] = num_images
-
-        data_distribution[split] = split_counts
+        data_distribution[split] = count_images_in_directory(split_dir)
 
     return data_distribution
 
-
-# Count images for MobileNet-SSD and YOLO
-mobilenet_counts = count_images_in_split(mobilenet_base_dir)
-yolo_counts = count_images_in_split(yolo_base_dir)
-
-
-# Function to plot the distribution
-def plot_data_distribution(data_counts, model_name):
+def plot_data_distribution(data_counts: Dict[str, Dict[str, int]], model_name: str) -> None:
     """
-    Plots data distribution for a given model.
+    Plots the distribution of images for a specific model, showing counts for each class
+    ('with_mask', 'without_mask', 'mask_weared_incorrect') across train, validation, and test splits.
 
-    Parameters:
-        data_counts (dict): Dictionary with counts of images for each split and class.
-        model_name (str): Name of the model (e.g., "MobileNet-SSD", "YOLO").
+    Args:
+        data_counts (Dict[str, Dict[str, int]]): A dictionary containing class-wise image counts
+                                                 for train, validation, and test splits.
+        model_name (str): The name of the model (e.g., "MobileNet-SSD", "YOLO").
+
+    Returns:
+        None
     """
     splits = ['train', 'validation', 'test']
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
     for i, split in enumerate(splits):
         split_counts = data_counts.get(split, {})
-        if not split_counts:  # Check if the split contains any data
-            axes[i].text(0.5, 0.5, 'No Data', ha='center',
-                         va='center', fontsize=12)
-            axes[i].set_title(
-                f'{model_name} - {split.capitalize()} Data Distribution')
+        if not split_counts:
+            axes[i].text(0.5, 0.5, 'No Data', ha='center', va='center', fontsize=12)
+            axes[i].set_title(f'{model_name} - {split.capitalize()} Data Distribution')
             axes[i].set_xlabel('Class')
             axes[i].set_ylabel('Number of Images')
             continue
 
-        colors = ['skyblue', 'lightgreen',
-                  'lightcoral', 'orange'][:len(split_counts)]
-        axes[i].bar(split_counts.keys(), split_counts.values(), color=colors)
-        axes[i].set_title(
-            f'{model_name} - {split.capitalize()} Data Distribution')
+        classes = ['with_mask', 'without_mask', 'mask_weared_incorrect']
+        counts = [split_counts.get(cls, 0) for cls in classes]
+        colors = ['skyblue', 'lightgreen', 'lightcoral']
+
+        axes[i].bar(classes, counts, color=colors)
+        axes[i].set_title(f'{model_name} - {split.capitalize()} Data Distribution')
         axes[i].set_xlabel('Class')
         axes[i].set_ylabel('Number of Images')
 
     plt.tight_layout()
     plt.show()
 
-
 if __name__ == '__main__':
-    # Plot data distribution for both models
+    mobilenet_base_dir = './dataset/processed_dataset/MobileNet-SSD'
+    yolo_base_dir = './dataset/processed_dataset/YOLO'
+
+    mobilenet_counts = get_data_distribution(mobilenet_base_dir)
+    yolo_counts = get_data_distribution(yolo_base_dir)
+
     print("MobileNet-SSD Data Distribution:", mobilenet_counts)
     print("YOLO Data Distribution:", yolo_counts)
 

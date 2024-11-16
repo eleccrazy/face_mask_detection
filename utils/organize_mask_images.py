@@ -1,69 +1,83 @@
 """
 File: organize_mask_images.py
 
-This script organizes images from a dataset into binary classification folders ('mask' and 'no_mask')
-based on their labels extracted from corresponding XML annotation files in PASCAL VOC format.
+This script processes images and their corresponding XML annotations (in PASCAL VOC format) to crop individual
+objects (bounding boxes) and organize the resulting cropped images into class-specific folders for
+multi-class classification tasks.
 
 Modules:
     - os: For directory and file path management.
-    - shutil: For copying files to target directories.
     - xml.etree.ElementTree (ET): For parsing XML files to extract annotation data.
+    - PIL.Image: For loading, cropping, and saving image files.
 
 Paths:
     - images_path: Directory containing all images.
     - annotations_path: Directory containing XML annotation files.
-    - mask_dir: Target directory for images labeled as 'with_mask'.
-    - no_mask_dir: Target directory for images labeled as 'without_mask' or 'mask_weared_incorrect'.
+    - output_dir: Target directory for storing cropped images, organized into class-specific subfolders
+      ('with_mask', 'without_mask', 'mask_weared_incorrect').
 
 Functionality:
     - Iterates through each XML file in the annotations folder.
-    - Parses the XML file to find the filename and associated labels.
-    - Checks if the label 'with_mask' is present, and moves the corresponding image to the 'mask' folder.
-    - Checks if the label 'without_mask' or 'mask_weared_incorrect' is present, and moves the image to the 'no_mask' folder.
-    - Ensures that the target directories are created if they do not already exist.
+    - Parses the XML file to extract:
+        - Filename of the associated image.
+        - Bounding box coordinates for each object.
+        - Class labels ('with_mask', 'without_mask', 'mask_weared_incorrect').
+    - Crops the bounding box region from the image for each object.
+    - Saves the cropped image to the corresponding class folder in the output directory.
+    - Ensures that the output directory and class-specific subdirectories are created if they do not already exist.
+    - Converts images with an alpha channel (RGBA) to RGB mode to ensure compatibility with JPEG format.
 
 Usage:
-    - Adjust the paths 'images_path' and 'annotations_path' as needed to match the directory structure.
-    - Run the script in a Python environment to organize images based on their labels.
+    - Update the paths `images_path` and `annotations_path` to match the directory structure of the dataset.
+    - Run the script in a Python environment to process and organize the images into the specified format.
 
 Assumptions:
     - The images and XML annotation files share the same naming convention (e.g., 'image1.jpg' and 'image1.xml').
-    - The XML files contain object labels 'with_mask', 'without_mask', and/or 'mask_weared_incorrect'.
+    - The XML files contain valid object labels ('with_mask', 'without_mask', 'mask_weared_incorrect').
+    - All bounding boxes are within the dimensions of the associated image.
 """
-# Import necessary modules
 import os
-import shutil
 import xml.etree.ElementTree as ET
+from PIL import Image
 
-def main():
-    # Define relative paths from the current directory
-    images_path = './dataset/images' # Directory containing all images
-    annotations_path = './dataset/annotations' # Directory containing XML annotation files
-    mask_dir = './dataset/binary_dataset/mask' # Target directory for images labeled as 'with_mask'
-    no_mask_dir = './dataset/binary_dataset/no_mask' # Target directory for images labeled as 'without_mask' or 'mask_weared_incorrect'
+def main() -> None:
+    images_path = './dataset/images'
+    annotations_path = './dataset/annotations'
+    output_dir = './dataset/cropped_dataset'
 
-    # Create directories if they don't exist
-    os.makedirs(mask_dir, exist_ok=True)
-    os.makedirs(no_mask_dir, exist_ok=True)
+    # Class directories
+    class_dirs = ['with_mask', 'without_mask', 'mask_weared_incorrect']
+    for class_dir in class_dirs:
+        os.makedirs(os.path.join(output_dir, class_dir), exist_ok=True)
 
-    # Iterate over all XML files in the annotations folder
+    # Iterate over XML files
     for xml_file in os.listdir(annotations_path):
         if xml_file.endswith('.xml'):
-            # Parse the XML file
             tree = ET.parse(os.path.join(annotations_path, xml_file))
             root = tree.getroot()
+
             image_file = root.find('filename').text
+            image_path = os.path.join(images_path, image_file)
+            image = Image.open(image_path)
 
-            # Extract labels from the annotation file
-            labels = [obj.find('name').text for obj in root.findall('object')]
+            # Ensure the image is in RGB mode
+            if image.mode == "RGBA":
+                image = image.convert("RGB")
 
-            # Classify based on the labels and move the image to the appropriate folder
-            if 'with_mask' in labels:
-                shutil.copy(os.path.join(images_path, image_file), os.path.join(mask_dir, image_file))
-            elif 'without_mask' in labels or 'mask_weared_incorrect' in labels:
-                shutil.copy(os.path.join(images_path, image_file), os.path.join(no_mask_dir, image_file))
+            for obj in root.findall('object'):
+                class_name = obj.find('name').text
+                if class_name not in class_dirs:
+                    continue
 
+                bbox = obj.find('bndbox')
+                xmin = int(bbox.find('xmin').text)
+                ymin = int(bbox.find('ymin').text)
+                xmax = int(bbox.find('xmax').text)
+                ymax = int(bbox.find('ymax').text)
+
+                # Crop and save image
+                cropped_image = image.crop((xmin, ymin, xmax, ymax))
+                cropped_image.save(os.path.join(output_dir, class_name, f"{image_file}_{xmin}_{ymin}.jpg"))
 
 if __name__ == '__main__':
-    # Entry point of the script
     main()
